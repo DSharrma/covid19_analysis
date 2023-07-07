@@ -208,6 +208,9 @@ order by location,date
 --this result is to create a view for import to visualization platform
 --further exploration of the data shall be done by visualization.
 
+if object_id('tempdb..#temptable_vax','U') is not null
+drop table #temptable_vax
+go
 with cte_tbl as
 (
 	select location, date, people_vaccinated,people_fully_vaccinated,total_vaccinations,
@@ -215,7 +218,7 @@ with cte_tbl as
 		count(people_fully_vaccinated) over (partition by location order by date) as pfv_group,
 		count(total_vaccinations) over (partition by location order by date) as tv_group
 	from PortfolioProjects..covid_vax
-	where location is not null
+	where continent is not null
 ),
 fill_table as 
 (
@@ -224,12 +227,25 @@ fill_table as
 		coalesce(first_value(convert(bigint,people_fully_vaccinated)) over (partition by location,pfv_group order by date),0) as fill_ppl_full_vaccinated,
 		coalesce(first_value(convert(bigint,total_vaccinations)) over (partition by location,tv_group order by date),0) as fill_total_vaccinated
 	from cte_tbl
+),
+new_table as
+(
+	select * ,
+		coalesce(fill_ppl_vaccinated - lag(fill_ppl_vaccinated) over (partition by location order by date),0) as new_ppl_vaccinated,
+		coalesce(fill_ppl_full_vaccinated-lag(fill_ppl_full_vaccinated) over (partition by location order by date),0) as new_ppl_full_vaccinated
+	from fill_table
 )
-select *
-from fill_table
+select *,(new_ppl_vaccinated + new_ppl_full_vaccinated) as new_total_vaccinations
+into #temptable_vax
+from new_table
 
 --created filled down values columns
 --replaced beginning null values with 0
+--created columns to show incremental increases of the cumulative columns
+--saved result into #temptable_vax
+
+select distinct(location)
+from #temptable_vax
 
 --choose which columns to be used, clean, filter accordingly and create view
 
@@ -238,9 +254,11 @@ select cd.iso_code,cd.continent,cd.location,
 	cd.population,
 	cd.new_cases,cd.total_cases,
 	cd.new_deaths,cd.total_deaths,
-	cv.new_vaccinations,cv.total_vaccinations
+	cv.people_vaccinated,cv.people_fully_vaccinated,cv.total_vaccinations,
+	cv.fill_ppl_vaccinated,cv.fill_ppl_full_vaccinated,cv.fill_total_vaccinated,
+	cv.new_ppl_vaccinated,cv.new_ppl_full_vaccinated,cv.new_total_vaccinations
 from PortfolioProjects..covid_death cd
-left join PortfolioProjects..covid_vax cv
+left join #temptable_vax cv
 	on cv.date=cd.date
 		and cv.location=cd.location
 where cd.continent is not null
