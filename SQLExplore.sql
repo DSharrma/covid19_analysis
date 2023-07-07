@@ -244,7 +244,7 @@ from new_table
 --created columns to show incremental increases of the cumulative columns
 --saved result into #temptable_vax
 
-select distinct(location)
+select *
 from #temptable_vax
 
 --choose which columns to be used, clean, filter accordingly and create view
