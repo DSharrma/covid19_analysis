@@ -208,7 +208,7 @@ order by location,date
 --this result is to create a view for import to visualization platform
 --further exploration of the data shall be done by visualization.
 
-if object_id('tempdb..#temptable_vax','U') is not null
+if object_id('temptable_vax','U') is not null
 drop table #temptable_vax
 go
 with cte_tbl as
@@ -236,7 +236,7 @@ new_table as
 	from fill_table
 )
 select *,(new_ppl_vaccinated + new_ppl_full_vaccinated) as new_total_vaccinations
-into #temptable_vax
+into temptable_vax
 from new_table
 
 --created filled down values columns
@@ -245,10 +245,12 @@ from new_table
 --saved result into #temptable_vax
 
 select *
-from #temptable_vax
+from temptable_vax
 
 --choose which columns to be used, clean, filter accordingly and create view
-
+create view vw_covid_case_death_vax as
+with vw_tbl as
+(
 select cd.iso_code,cd.continent,cd.location,
 	convert(date,format(cd.date,'yyyy-MM-dd')) as clean_date,
 	cd.population,
@@ -258,7 +260,14 @@ select cd.iso_code,cd.continent,cd.location,
 	cv.fill_ppl_vaccinated,cv.fill_ppl_full_vaccinated,cv.fill_total_vaccinated,
 	cv.new_ppl_vaccinated,cv.new_ppl_full_vaccinated,cv.new_total_vaccinations
 from PortfolioProjects..covid_death cd
-left join #temptable_vax cv
+left join temptable_vax cv
 	on cv.date=cd.date
 		and cv.location=cd.location
 where cd.continent is not null
+)
+select *
+from vw_tbl
+--order by location,clean_date
+
+select * from vw_covid_case_death_vax
+--further analysis shall be done by visualization.
