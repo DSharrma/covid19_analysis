@@ -248,11 +248,12 @@ select *
 from temptable_vax
 
 --choose which columns to be used, clean, filter accordingly and create view
+
 create view vw_covid_case_death_vax as
 with vw_tbl as
 (
-select cd.iso_code,cd.continent,cd.location,
-	convert(date,format(cd.date,'yyyy-MM-dd')) as clean_date,
+	select cd.iso_code,cd.continent,cd.location,
+		convert(date,format(cd.date,'yyyy-MM-dd')) as clean_date,
 	cd.population,
 	cd.new_cases,cd.total_cases,
 	cd.new_deaths,cd.total_deaths,
@@ -270,4 +271,59 @@ from vw_tbl
 --order by location,clean_date
 
 select * from vw_covid_case_death_vax
---further analysis shall be done by visualization.
+
+--it does appear that during data aggregation that there are special characters like brackets in location name
+with cte1 as
+(
+	select distinct(location) as uniquelocation
+	from vw_covid_case_death_vax
+)
+select uniquelocation
+from cte1
+where uniquelocation like '%[^a-zA-Z0-9" "]%'
+--appears to be notes on which part of the specific country such as Saint Martin (French Part)
+--we can leave notes on the side but remove it from the table
+--this is so that the row can sync with a map and be visualized
+
+if OBJECT_ID('dbo.vw_covid_case_death_vx','V') is not null drop view dbo.vw_covid_case_death_vax
+
+create view vw_covid_case_death_vax as
+with vw_tbl as
+(
+	select cd.iso_code,cd.continent,cd.location,
+		case
+			when CHARINDEX('(',cd.location)>0
+				and CHARINDEX(')',cd.location)>CHARINDEX('(',cd.location)
+				then stuff(cd.location,CHARINDEX('(',cd.location),CHARINDEX(')',cd.location)-CHARINDEX('(',cd.location)+2,'')
+			else cd.location
+		end as clean_location,
+		convert(date,format(cd.date,'yyyy-MM-dd')) as clean_date,
+	cd.population,
+	cd.new_cases,cd.total_cases,
+	cd.new_deaths,cd.total_deaths,
+	cv.people_vaccinated,cv.people_fully_vaccinated,cv.total_vaccinations,
+	cv.fill_ppl_vaccinated,cv.fill_ppl_full_vaccinated,cv.fill_total_vaccinated,
+	cv.new_ppl_vaccinated,cv.new_ppl_full_vaccinated,cv.new_total_vaccinations
+from PortfolioProjects..covid_death cd
+left join temptable_vax cv
+	on cv.date=cd.date
+		and cv.location=cd.location
+where cd.continent is not null
+)
+select *
+from vw_tbl
+
+--take a look
+select * from vw_covid_case_death_vax order by 4
+
+--let's check if the errors have been cleaned
+with cte1 as
+(
+	select distinct(clean_location) as uniquelocation
+	from vw_covid_case_death_vax
+)
+select uniquelocation
+from cte1
+where uniquelocation like '%[^a-zA-Z0-9" "]%'
+
+--alright looks good, further analysis and visualization shall be done in Power BI
